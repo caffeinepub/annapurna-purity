@@ -44,7 +44,6 @@ function NeuralCanvas() {
       if (!ctx || !canvas) return;
       ctx.clearRect(0, 0, W, H);
 
-      // Move nodes
       for (const node of nodes) {
         node.x += node.vx;
         node.y += node.vy;
@@ -52,7 +51,6 @@ function NeuralCanvas() {
         if (node.y < 0 || node.y > H) node.vy *= -1;
       }
 
-      // Draw connections
       for (let i = 0; i < nodes.length; i++) {
         for (let j = i + 1; j < nodes.length; j++) {
           const dx = nodes[i].x - nodes[j].x;
@@ -70,7 +68,6 @@ function NeuralCanvas() {
         }
       }
 
-      // Draw node dots
       for (const node of nodes) {
         ctx.beginPath();
         ctx.fillStyle = "rgba(0, 212, 255, 0.35)";
@@ -111,10 +108,63 @@ function NeuralCanvas() {
   );
 }
 
+// Hinglish cinematic script for the voice greeting
+const VOICE_SCRIPT =
+  "Namaste! Welcome to Annapurna Purity Plant. Thanks for visiting our website. Kripya Enter button par tap karein... aur shuddhta ka anubhav karein.";
+
 export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
   const [scene, setScene] = useState(0);
   const [dismissed, setDismissed] = useState(false);
   const [visible, setVisible] = useState(true);
+
+  const speechRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const delayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Welcome voice greeting — 3-second delay, male voice, energetic cinematic tone
+  useEffect(() => {
+    if (!("speechSynthesis" in window)) return;
+
+    const utter = new SpeechSynthesisUtterance(VOICE_SCRIPT);
+    utter.rate = 0.92; // slightly slower for cinematic delivery
+    utter.pitch = 1.15; // slightly higher for energetic, cinematic feel
+    utter.volume = 1; // full volume — loud and clear
+
+    const selectVoiceAndSpeak = () => {
+      const voices = window.speechSynthesis.getVoices();
+
+      // Prefer a male English voice — try common male voice names first
+      const maleVoice =
+        voices.find((v) =>
+          /\b(male|man|guy|david|daniel|james|ryan|mark|george|diego|samantha.*male)\b/i.test(
+            v.name,
+          ),
+        ) ||
+        voices.find((v) => /^en/.test(v.lang) && /google/i.test(v.name)) ||
+        voices.find((v) => /^en/.test(v.lang) && !v.localService) ||
+        voices.find((v) => /^en/.test(v.lang)) ||
+        voices[0];
+
+      if (maleVoice) utter.voice = maleVoice;
+
+      // 3-second autoplay delay after page load
+      delayTimerRef.current = setTimeout(() => {
+        window.speechSynthesis.speak(utter);
+      }, 3000);
+    };
+
+    if (window.speechSynthesis.getVoices().length > 0) {
+      selectVoiceAndSpeak();
+    } else {
+      window.speechSynthesis.onvoiceschanged = selectVoiceAndSpeak;
+    }
+
+    speechRef.current = utter;
+
+    return () => {
+      if (delayTimerRef.current) clearTimeout(delayTimerRef.current);
+      window.speechSynthesis.cancel();
+    };
+  }, []);
 
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = [];
@@ -137,6 +187,8 @@ export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
   }, []);
 
   const handleDismiss = () => {
+    if (delayTimerRef.current) clearTimeout(delayTimerRef.current);
+    window.speechSynthesis.cancel();
     setDismissed(true);
   };
 
@@ -204,10 +256,6 @@ export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
           0%, 100% { transform: translateY(0px); }
           50% { transform: translateY(-8px); }
         }
-        @keyframes backgroundDim {
-          from { background: radial-gradient(ellipse at center, #050f0a, #020809); }
-          to { background: radial-gradient(ellipse at center, #020a06, #010506); }
-        }
       `}</style>
 
       <AnimatePresence onExitComplete={handleExitComplete}>
@@ -232,10 +280,8 @@ export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
               overflow: "hidden",
             }}
           >
-            {/* Neural Network Background */}
             <NeuralCanvas />
 
-            {/* Glowing center radial highlight */}
             <div
               style={{
                 position: "absolute",
@@ -251,7 +297,7 @@ export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
               }}
             />
 
-            {/* ── Scene 1-3: Bottle ── */}
+            {/* ── Scene 0-2: Bottle ── */}
             {scene <= 2 && (
               <div
                 style={{
@@ -263,7 +309,6 @@ export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
                   height: 280,
                 }}
               >
-                {/* Orbit particles */}
                 {PARTICLES.map((p) => (
                   <div
                     key={p.id}
@@ -289,7 +334,6 @@ export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
                   />
                 ))}
 
-                {/* Bottle SVG */}
                 <svg
                   role="img"
                   aria-label="Digital bottle animation"
@@ -315,7 +359,6 @@ export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
                         : undefined,
                   }}
                 >
-                  {/* Bottle cap */}
                   <rect
                     x="38"
                     y="2"
@@ -326,7 +369,6 @@ export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
                     strokeWidth="2"
                     fill="rgba(0,212,255,0.08)"
                   />
-                  {/* Neck */}
                   <rect
                     x="36"
                     y="18"
@@ -337,7 +379,6 @@ export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
                     strokeWidth="2"
                     fill="rgba(0,212,255,0.06)"
                   />
-                  {/* Shoulder */}
                   <path
                     d="M36 46 L18 75 L18 78 L92 78 L92 75 L74 46 Z"
                     stroke="#00d4ff"
@@ -345,7 +386,6 @@ export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
                     fill="rgba(0,212,255,0.06)"
                     strokeLinejoin="round"
                   />
-                  {/* Body */}
                   <rect
                     x="16"
                     y="76"
@@ -356,7 +396,6 @@ export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
                     strokeWidth="2"
                     fill="rgba(0,212,255,0.05)"
                   />
-                  {/* Bottom cap */}
                   <rect
                     x="18"
                     y="202"
@@ -367,7 +406,6 @@ export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
                     strokeWidth="2"
                     fill="rgba(0,212,255,0.1)"
                   />
-                  {/* Internal lines for glass effect */}
                   <line
                     x1="30"
                     y1="90"
@@ -384,7 +422,6 @@ export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
                     stroke="rgba(0,212,255,0.12)"
                     strokeWidth="1"
                   />
-                  {/* Scene 2: Scanning beam overlay */}
                   {scene === 1 && (
                     <rect
                       x="16"
@@ -401,7 +438,6 @@ export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
                   )}
                 </svg>
 
-                {/* Scan beam (scene 1) - positioned relative to bottle container */}
                 {scene === 1 && (
                   <div
                     style={{
@@ -418,7 +454,6 @@ export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
                   />
                 )}
 
-                {/* Scene 2: ANALYZING text */}
                 {scene === 2 && (
                   <div
                     style={{
@@ -452,7 +487,6 @@ export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
                   height: 280,
                 }}
               >
-                {/* Energy pulse rings */}
                 {[0, 1, 2].map((i) => (
                   <div
                     key={i}
@@ -473,7 +507,6 @@ export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
                   />
                 ))}
 
-                {/* Plant SVG */}
                 <svg
                   role="img"
                   aria-label="Plant growth animation"
@@ -493,44 +526,37 @@ export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
                       "drop-shadow(0 0 10px #00ff88) drop-shadow(0 0 20px #00ff8866)",
                   }}
                 >
-                  {/* Main stem */}
                   <path
                     d="M70 230 L70 60"
                     stroke="#00ff88"
                     strokeWidth="5"
                     strokeLinecap="round"
                   />
-                  {/* Left leaf bottom */}
                   <path
                     d="M70 190 C50 175, 20 170, 15 155 C30 158, 55 165, 70 180"
                     fill="#00ff88"
                     opacity="0.9"
                   />
-                  {/* Right leaf bottom */}
                   <path
                     d="M70 175 C90 158, 118 153, 125 138 C110 142, 84 150, 70 165"
                     fill="#00ff88"
                     opacity="0.9"
                   />
-                  {/* Left leaf mid */}
                   <path
                     d="M70 145 C44 128, 18 122, 12 104 C30 109, 56 120, 70 135"
                     fill="#00ff88"
                     opacity="0.85"
                   />
-                  {/* Right leaf mid */}
                   <path
                     d="M70 130 C96 112, 122 105, 128 86 C108 92, 82 107, 70 118"
                     fill="#00ff88"
                     opacity="0.85"
                   />
-                  {/* Left leaf top */}
                   <path
                     d="M70 98 C50 82, 28 76, 22 60 C38 65, 58 78, 70 90"
                     fill="#00ff88"
                     opacity="0.75"
                   />
-                  {/* Center top bud */}
                   <ellipse
                     cx="70"
                     cy="52"
@@ -565,7 +591,6 @@ export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
                   textAlign: "center",
                 }}
               >
-                {/* Plant still visible behind - small version */}
                 <div
                   style={{
                     position: "absolute",
@@ -581,9 +606,7 @@ export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
                     height="80"
                     viewBox="0 0 140 240"
                     fill="none"
-                    style={{
-                      filter: "drop-shadow(0 0 6px #00ff88)",
-                    }}
+                    style={{ filter: "drop-shadow(0 0 6px #00ff88)" }}
                   >
                     <path
                       d="M70 230 L70 60"
@@ -607,7 +630,6 @@ export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
                   </svg>
                 </div>
 
-                {/* Logo */}
                 <img
                   src="/logo.png"
                   alt="Annapurna Purity"
@@ -618,7 +640,6 @@ export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
                   }}
                 />
 
-                {/* Main headline */}
                 <h1
                   style={{
                     color: "#ffffff",
@@ -637,7 +658,6 @@ export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
                   Welcome to the Future of Sustainability
                 </h1>
 
-                {/* Subtext */}
                 <p
                   style={{
                     color: "#00d4ff",
@@ -652,7 +672,6 @@ export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
                   Powered by AI
                 </p>
 
-                {/* CTA Button */}
                 <button
                   type="button"
                   data-ocid="intro.primary_button"
@@ -678,7 +697,6 @@ export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
                     WebkitTapHighlightColor: "transparent",
                   }}
                 >
-                  {/* Gradient border using ::before trick via wrapper */}
                   <span
                     style={{
                       position: "absolute",
@@ -692,7 +710,6 @@ export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
                   Tap to Enter
                 </button>
 
-                {/* Skip hint */}
                 <p
                   style={{
                     color: "rgba(255,255,255,0.3)",
@@ -707,7 +724,6 @@ export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
               </div>
             )}
 
-            {/* Background click to dismiss when CTA is visible */}
             {scene >= 5 && (
               <div
                 role="button"

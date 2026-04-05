@@ -1,12 +1,23 @@
 import { Canvas, useFrame } from "@react-three/fiber";
-import { ChevronRight, MapPin, Menu, Phone, X } from "lucide-react";
+import {
+  ChevronRight,
+  Copy,
+  Download,
+  MapPin,
+  Menu,
+  Phone,
+  QrCode,
+  Shield,
+  X,
+} from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import { QRCodeCanvas } from "qrcode.react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SiWhatsapp } from "react-icons/si";
 import * as THREE from "three";
 import IntroAnimation from "./components/IntroAnimation";
 
-type Section = "home" | "about" | "contact" | "order" | "profile";
+type Section = "home" | "about" | "contact" | "order" | "profile" | "upi-pay";
 
 const NAV_LINKS: { id: Section; label: string }[] = [
   { id: "home", label: "Home" },
@@ -14,6 +25,7 @@ const NAV_LINKS: { id: Section; label: string }[] = [
   { id: "contact", label: "Contact" },
   { id: "order", label: "Order" },
   { id: "profile", label: "Profile" },
+  { id: "upi-pay", label: "UPI Pay" },
 ];
 
 function GoldDivider({ className = "" }: { className?: string }) {
@@ -1135,6 +1147,372 @@ function ProfileSection() {
   );
 }
 
+// ── UPI QR CODE SECTION ───────────────────────────────────────────────────────
+function UPIQRSection() {
+  const [upiId, setUpiId] = useState("");
+  const [holderName, setHolderName] = useState("");
+  const [txnNote, setTxnNote] = useState("");
+  const [amount, setAmount] = useState("");
+  const [upiUri, setUpiUri] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [errors, setErrors] = useState<{ upiId?: string; holderName?: string }>(
+    {},
+  );
+  const qrRef = useRef<HTMLDivElement>(null);
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const validate = () => {
+    const newErrors: typeof errors = {};
+    if (!upiId.trim()) {
+      newErrors.upiId = "UPI ID is required";
+    } else if (!upiId.includes("@")) {
+      newErrors.upiId = "UPI ID must contain @ (e.g. yourname@upi)";
+    }
+    if (!holderName.trim()) {
+      newErrors.holderName = "Account holder name is required";
+    }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleGenerate = () => {
+    if (!validate()) return;
+
+    let uri = `upi://pay?pa=${encodeURIComponent(upiId.trim())}&pn=${encodeURIComponent(holderName.trim())}&cu=INR`;
+    if (amount.trim()) {
+      uri += `&am=${encodeURIComponent(amount.trim())}`;
+    }
+    if (txnNote.trim()) {
+      uri += `&tn=${encodeURIComponent(txnNote.trim())}`;
+    }
+    setUpiUri(uri);
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(upiUri).then(() => {
+      setCopied(true);
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = setTimeout(() => setCopied(false), 2500);
+    });
+  };
+
+  const handleDownload = () => {
+    const canvas = qrRef.current?.querySelector("canvas");
+    if (!canvas) return;
+    const link = document.createElement("a");
+    link.download = "annapurna-purity-upi-qr.png";
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  };
+
+  const securityTips = [
+    "Never share your OTP or UPI PIN with anyone",
+    "Use only verified UPI apps — GPay, PhonePe, Paytm, or BHIM",
+    "Enable SMS and email alerts for every transaction",
+  ];
+
+  return (
+    <section
+      id="upi-pay"
+      data-ocid="upi-pay.section"
+      className="py-20 md:py-28 scroll-mt-24"
+      style={{ scrollMarginTop: "96px", background: "oklch(0.07 0 0)" }}
+    >
+      <div className="max-w-4xl mx-auto px-6">
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-80px" }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+        >
+          <SectionHeading>UPI Payment QR Code</SectionHeading>
+
+          <p
+            className="text-base mb-8 max-w-xl"
+            style={{ color: "oklch(var(--gold-muted))" }}
+          >
+            Generate a scannable UPI QR code so buyers can pay you instantly via
+            PhonePe, Google Pay, Paytm, or BHIM.
+          </p>
+
+          <div className="grid md:grid-cols-2 gap-10 items-start">
+            {/* ── Left: Form ── */}
+            <div className="space-y-5">
+              <div>
+                <GoldInput
+                  label="UPI ID *"
+                  inputId="upi-id"
+                  type="text"
+                  value={upiId}
+                  onChange={(e) => {
+                    setUpiId(e.target.value);
+                    setErrors((p) => ({ ...p, upiId: undefined }));
+                  }}
+                  placeholder="yourname@upi"
+                  data-ocid="upi-pay.input"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                {errors.upiId && (
+                  <p
+                    data-ocid="upi-pay.error_state"
+                    className="text-sm mt-1"
+                    style={{ color: "#e05a5a" }}
+                  >
+                    {errors.upiId}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <GoldInput
+                  label="Account Holder Name *"
+                  inputId="upi-holder-name"
+                  type="text"
+                  value={holderName}
+                  onChange={(e) => {
+                    setHolderName(e.target.value);
+                    setErrors((p) => ({ ...p, holderName: undefined }));
+                  }}
+                  placeholder="Full name as registered"
+                  data-ocid="upi-pay.input"
+                  autoComplete="name"
+                />
+                {errors.holderName && (
+                  <p
+                    data-ocid="upi-pay.error_state"
+                    className="text-sm mt-1"
+                    style={{ color: "#e05a5a" }}
+                  >
+                    {errors.holderName}
+                  </p>
+                )}
+              </div>
+
+              <GoldInput
+                label="Transaction Note (optional)"
+                inputId="upi-txn-note"
+                type="text"
+                value={txnNote}
+                onChange={(e) => setTxnNote(e.target.value)}
+                placeholder="e.g. Payment for Order"
+                data-ocid="upi-pay.input"
+                autoComplete="off"
+              />
+
+              <GoldInput
+                label="Amount in INR (optional — leave blank for flexible)"
+                inputId="upi-amount"
+                type="number"
+                min="1"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="e.g. 500"
+                data-ocid="upi-pay.input"
+                autoComplete="off"
+              />
+
+              <div className="pt-2">
+                <GoldButton
+                  onClick={handleGenerate}
+                  data-ocid="upi-pay.primary_button"
+                >
+                  <QrCode className="w-4 h-4" />
+                  Generate QR Code
+                </GoldButton>
+              </div>
+            </div>
+
+            {/* ── Right: QR Output ── */}
+            <div className="flex flex-col items-center gap-6">
+              {upiUri ? (
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={upiUri}
+                    className="flex flex-col items-center gap-6 w-full"
+                    initial={{ opacity: 0, scale: 0.92 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.4, ease: "easeOut" }}
+                  >
+                    {/* QR Canvas */}
+                    <div
+                      ref={qrRef}
+                      className="rounded-2xl p-4"
+                      style={{
+                        background: "#ffffff",
+                        boxShadow: "0 0 32px oklch(var(--gold) / 25%)",
+                        border: "2px solid oklch(var(--gold) / 50%)",
+                      }}
+                    >
+                      <QRCodeCanvas
+                        value={upiUri}
+                        size={240}
+                        bgColor="#ffffff"
+                        fgColor="#1a1a1a"
+                        level="M"
+                        marginSize={1}
+                      />
+                    </div>
+
+                    {/* Payee info badge */}
+                    <div
+                      className="text-center rounded-lg px-5 py-3 w-full"
+                      style={{
+                        background: "oklch(var(--gold) / 6%)",
+                        border: "1px solid oklch(var(--gold) / 25%)",
+                      }}
+                    >
+                      <p
+                        className="text-xs tracking-[0.15em] uppercase mb-1"
+                        style={{ color: "oklch(var(--gold-muted))" }}
+                      >
+                        Pay to
+                      </p>
+                      <p
+                        className="text-lg font-bold tracking-wide"
+                        style={{ color: "oklch(var(--gold))" }}
+                      >
+                        {holderName}
+                      </p>
+                      <p
+                        className="text-sm mt-0.5"
+                        style={{ color: "oklch(var(--gold-muted))" }}
+                      >
+                        {upiId}
+                      </p>
+                      {amount && (
+                        <p
+                          className="text-base font-semibold mt-1"
+                          style={{ color: "oklch(var(--gold))" }}
+                        >
+                          ₹{amount}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* UPI URI code block */}
+                    <div
+                      className="w-full rounded-lg p-4"
+                      style={{
+                        background: "#0d0d0d",
+                        border: "1px solid oklch(var(--gold) / 20%)",
+                      }}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span
+                          className="text-xs uppercase tracking-widest font-semibold"
+                          style={{ color: "oklch(var(--gold-muted))" }}
+                        >
+                          UPI URI
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleCopy}
+                          data-ocid="upi-pay.secondary_button"
+                          className="flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-semibold transition-all duration-200"
+                          style={{
+                            background: copied
+                              ? "oklch(var(--gold) / 20%)"
+                              : "oklch(var(--gold) / 8%)",
+                            border: "1px solid oklch(var(--gold) / 30%)",
+                            color: "oklch(var(--gold))",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <Copy className="w-3 h-3" />
+                          {copied ? "Copied!" : "Copy"}
+                        </button>
+                      </div>
+                      <code
+                        className="block text-xs leading-relaxed break-all"
+                        style={{ color: "oklch(var(--gold) / 80%)" }}
+                      >
+                        {upiUri}
+                      </code>
+                    </div>
+
+                    {/* Download button */}
+                    <GoldButton
+                      onClick={handleDownload}
+                      data-ocid="upi-pay.download_button"
+                    >
+                      <Download className="w-4 h-4" />
+                      Download QR as PNG
+                    </GoldButton>
+                  </motion.div>
+                </AnimatePresence>
+              ) : (
+                <div
+                  data-ocid="upi-pay.empty_state"
+                  className="flex flex-col items-center justify-center gap-4 rounded-2xl w-full"
+                  style={{
+                    minHeight: "300px",
+                    border: "1px dashed oklch(var(--gold) / 25%)",
+                    background: "oklch(var(--gold) / 3%)",
+                  }}
+                >
+                  <QrCode
+                    className="w-16 h-16 opacity-25"
+                    style={{ color: "oklch(var(--gold))" }}
+                  />
+                  <p
+                    className="text-sm text-center px-6"
+                    style={{ color: "oklch(var(--gold-muted))" }}
+                  >
+                    Fill in your UPI details on the left and click{" "}
+                    <span style={{ color: "oklch(var(--gold))" }}>
+                      Generate QR Code
+                    </span>{" "}
+                    to create your payment QR.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── Security Tips ── */}
+          <div
+            className="mt-10 rounded-xl p-6"
+            style={{
+              background: "oklch(var(--gold) / 4%)",
+              border: "1px solid oklch(var(--gold) / 18%)",
+            }}
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <Shield
+                className="w-4 h-4 flex-shrink-0"
+                style={{ color: "oklch(var(--gold))" }}
+              />
+              <h3
+                className="text-xs tracking-[0.2em] uppercase font-bold"
+                style={{ color: "oklch(var(--gold))" }}
+              >
+                Security Tips
+              </h3>
+            </div>
+            <ul className="space-y-2">
+              {securityTips.map((tip) => (
+                <li
+                  key={tip}
+                  className="flex items-start gap-2.5 text-sm"
+                  style={{ color: "oklch(var(--gold-muted))" }}
+                >
+                  <span
+                    className="mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0"
+                    style={{ background: "oklch(var(--gold))" }}
+                  />
+                  {tip}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
 // ── HEADER / NAV ──────────────────────────────────────────────────────────────
 function Header({ activeSection }: { activeSection: Section }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -1347,6 +1725,7 @@ export default function App() {
       "contact",
       "order",
       "profile",
+      "upi-pay",
     ];
 
     const observer = new IntersectionObserver(
@@ -1387,6 +1766,8 @@ export default function App() {
         <OrderSection />
         <GoldDivider />
         <ProfileSection />
+        <GoldDivider />
+        <UPIQRSection />
       </main>
 
       <footer
