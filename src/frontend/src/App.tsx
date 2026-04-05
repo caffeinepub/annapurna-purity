@@ -2,7 +2,9 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import {
   ChevronRight,
   Copy,
+  CreditCard,
   Download,
+  LayoutDashboard,
   MapPin,
   Menu,
   Phone,
@@ -11,13 +13,21 @@ import {
   X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { QRCodeCanvas } from "qrcode.react";
+// QR generation via canvas API (no dependency needed)
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SiWhatsapp } from "react-icons/si";
 import * as THREE from "three";
 import IntroAnimation from "./components/IntroAnimation";
+import PaymentHistorySection from "./components/PaymentHistorySection";
 
-type Section = "home" | "about" | "contact" | "order" | "profile" | "upi-pay";
+type Section =
+  | "home"
+  | "about"
+  | "contact"
+  | "order"
+  | "profile"
+  | "upi-pay"
+  | "payment-history";
 
 const NAV_LINKS: { id: Section; label: string }[] = [
   { id: "home", label: "Home" },
@@ -26,6 +36,7 @@ const NAV_LINKS: { id: Section; label: string }[] = [
   { id: "order", label: "Order" },
   { id: "profile", label: "Profile" },
   { id: "upi-pay", label: "UPI Pay" },
+  { id: "payment-history", label: "Payment History" },
 ];
 
 function GoldDivider({ className = "" }: { className?: string }) {
@@ -1197,11 +1208,12 @@ function UPIQRSection() {
   };
 
   const handleDownload = () => {
-    const canvas = qrRef.current?.querySelector("canvas");
-    if (!canvas) return;
+    if (!upiUri) return;
+    const url = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(upiUri)}&bgcolor=ffffff&color=1a1a1a&margin=10`;
     const link = document.createElement("a");
     link.download = "annapurna-purity-upi-qr.png";
-    link.href = canvas.toDataURL("image/png");
+    link.href = url;
+    link.target = "_blank";
     link.click();
   };
 
@@ -1345,13 +1357,13 @@ function UPIQRSection() {
                         border: "2px solid oklch(var(--gold) / 50%)",
                       }}
                     >
-                      <QRCodeCanvas
-                        value={upiUri}
-                        size={240}
-                        bgColor="#ffffff"
-                        fgColor="#1a1a1a"
-                        level="M"
-                        marginSize={1}
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(upiUri)}&bgcolor=ffffff&color=1a1a1a&margin=8`}
+                        alt="UPI Payment QR Code"
+                        width={240}
+                        height={240}
+                        style={{ display: "block" }}
+                        crossOrigin="anonymous"
                       />
                     </div>
 
@@ -1513,8 +1525,238 @@ function UPIQRSection() {
   );
 }
 
+// ── SIDEBAR ───────────────────────────────────────────────────────────────────
+function Sidebar({
+  isOpen,
+  onClose,
+  activeSection,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  activeSection: Section;
+}) {
+  const scrollTo = (id: Section) => {
+    onClose();
+    setTimeout(() => {
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+    }, 80);
+  };
+
+  const sectionIcons: Record<Section, string> = {
+    home: "🏠",
+    about: "ℹ️",
+    contact: "📞",
+    order: "🛒",
+    profile: "👤",
+    "upi-pay": "📱",
+    "payment-history": "💳",
+  };
+
+  return (
+    <>
+      {/* Backdrop */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            key="sidebar-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={onClose}
+            data-ocid="nav.modal"
+            className="fixed inset-0 z-[60]"
+            style={{
+              background: "rgba(0,0,0,0.65)",
+              backdropFilter: "blur(4px)",
+            }}
+            aria-hidden="true"
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Slide-in panel */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.aside
+            key="sidebar-panel"
+            initial={{ x: "-100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "-100%" }}
+            transition={{ type: "spring", stiffness: 350, damping: 30 }}
+            className="fixed top-0 left-0 bottom-0 z-[70] flex flex-col"
+            data-ocid="nav.sheet"
+            style={{
+              width: "280px",
+              background: "#0a0a0a",
+              borderRight: "1px solid oklch(var(--gold) / 25%)",
+              boxShadow: "8px 0 40px rgba(0,0,0,0.7)",
+            }}
+            aria-label="Navigation sidebar"
+          >
+            {/* Header */}
+            <div
+              className="flex items-center justify-between px-5 py-4 flex-shrink-0"
+              style={{ borderBottom: "1px solid oklch(var(--gold) / 15%)" }}
+            >
+              <div className="flex items-center gap-3">
+                <img
+                  src="/logo.png"
+                  alt="Logo"
+                  style={{
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "7px",
+                    boxShadow: "0 0 8px rgba(255,215,0,0.45)",
+                  }}
+                />
+                <div>
+                  <div
+                    className="text-sm font-bold tracking-widest uppercase leading-tight"
+                    style={{ color: "oklch(var(--gold))" }}
+                  >
+                    ANNA PURITY
+                  </div>
+                  <div
+                    className="text-xs tracking-wider uppercase"
+                    style={{ color: "oklch(var(--gold-muted))" }}
+                  >
+                    Navigation
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                data-ocid="nav.close_button"
+                aria-label="Close sidebar"
+                className="p-1.5 rounded transition-all duration-200"
+                style={{
+                  background: "none",
+                  border: "1px solid oklch(var(--gold) / 25%)",
+                  color: "oklch(var(--gold))",
+                  cursor: "pointer",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "oklch(var(--gold) / 10%)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "none";
+                }}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Nav links */}
+            <nav
+              className="flex-1 overflow-y-auto px-3 py-4 space-y-1"
+              aria-label="Sidebar navigation"
+            >
+              {NAV_LINKS.map((link, idx) => {
+                const isActive = activeSection === link.id;
+                const isPaymentHistory = link.id === "payment-history";
+                return (
+                  <motion.button
+                    key={link.id}
+                    type="button"
+                    onClick={() => scrollTo(link.id)}
+                    data-ocid={`nav.sidebar.${link.id}.link`}
+                    initial={{ opacity: 0, x: -16 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: idx * 0.04 + 0.05 }}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl w-full text-left transition-all duration-200"
+                    style={{
+                      background: isActive
+                        ? "oklch(var(--gold) / 12%)"
+                        : "transparent",
+                      border: isActive
+                        ? "1px solid oklch(var(--gold) / 30%)"
+                        : "1px solid transparent",
+                      color: isActive
+                        ? "oklch(var(--gold-bright))"
+                        : "oklch(var(--gold))",
+                      cursor: "pointer",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isActive) {
+                        e.currentTarget.style.background =
+                          "oklch(var(--gold) / 6%)";
+                        e.currentTarget.style.borderColor =
+                          "oklch(var(--gold) / 20%)";
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isActive) {
+                        e.currentTarget.style.background = "transparent";
+                        e.currentTarget.style.borderColor = "transparent";
+                      }
+                    }}
+                  >
+                    <span
+                      className="text-base flex-shrink-0"
+                      aria-hidden="true"
+                    >
+                      {sectionIcons[link.id]}
+                    </span>
+                    <span className="text-sm font-semibold tracking-wide flex-1">
+                      {link.label}
+                    </span>
+                    {isPaymentHistory && (
+                      <span
+                        className="text-xs px-2 py-0.5 rounded-full font-bold tracking-wider flex-shrink-0"
+                        style={{
+                          background: "oklch(0.48 0.14 148 / 20%)",
+                          color: "oklch(0.75 0.14 148)",
+                          border: "1px solid oklch(0.6 0.14 148 / 30%)",
+                          fontSize: "10px",
+                        }}
+                      >
+                        ADMIN
+                      </span>
+                    )}
+                    {isActive && (
+                      <motion.span
+                        layoutId="sidebar-active-dot"
+                        className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                        style={{ background: "oklch(var(--gold))" }}
+                      />
+                    )}
+                  </motion.button>
+                );
+              })}
+            </nav>
+
+            {/* Footer */}
+            <div
+              className="px-5 py-4 flex-shrink-0"
+              style={{ borderTop: "1px solid oklch(var(--gold) / 15%)" }}
+            >
+              <div className="flex items-center gap-2">
+                <CreditCard
+                  className="w-3.5 h-3.5 flex-shrink-0"
+                  style={{ color: "oklch(var(--gold) / 50%)" }}
+                />
+                <p
+                  className="text-xs"
+                  style={{ color: "oklch(var(--gold) / 40%)" }}
+                >
+                  Payment History is admin-protected
+                </p>
+              </div>
+            </div>
+          </motion.aside>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+
 // ── HEADER / NAV ──────────────────────────────────────────────────────────────
-function Header({ activeSection }: { activeSection: Section }) {
+function Header({
+  activeSection,
+  onSidebarOpen,
+}: { activeSection: Section; onSidebarOpen: () => void }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -1631,10 +1873,38 @@ function Header({ activeSection }: { activeSection: Section }) {
             ))}
           </nav>
 
+          {/* Sidebar toggle — always visible */}
+          <button
+            type="button"
+            onClick={onSidebarOpen}
+            data-ocid="nav.open_modal_button"
+            aria-label="Open navigation sidebar"
+            className="p-2 rounded transition-all duration-200"
+            style={{
+              color: "oklch(var(--gold))",
+              background: "none",
+              border: "1px solid oklch(var(--gold) / 25%)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "oklch(var(--gold) / 8%)";
+              e.currentTarget.style.borderColor = "oklch(var(--gold) / 60%)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "none";
+              e.currentTarget.style.borderColor = "oklch(var(--gold) / 25%)";
+            }}
+          >
+            <LayoutDashboard className="w-5 h-5" />
+          </button>
+
           {/* Mobile hamburger */}
           <button
             type="button"
-            className="md:hidden p-2 rounded"
+            className="md:hidden p-2 rounded ml-1"
             onClick={() => setMobileOpen((p) => !p)}
             data-ocid="nav.toggle"
             aria-label={mobileOpen ? "Close menu" : "Open menu"}
@@ -1717,6 +1987,7 @@ function Header({ activeSection }: { activeSection: Section }) {
 export default function App() {
   const [activeSection, setActiveSection] = useState<Section>("home");
   const [showIntro, setShowIntro] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     const sectionIds: Section[] = [
@@ -1726,6 +1997,7 @@ export default function App() {
       "order",
       "profile",
       "upi-pay",
+      "payment-history",
     ];
 
     const observer = new IntersectionObserver(
@@ -1754,7 +2026,15 @@ export default function App() {
       style={{ background: "#0B0B0B", color: "oklch(var(--gold))" }}
     >
       {showIntro && <IntroAnimation onDismiss={() => setShowIntro(false)} />}
-      <Header activeSection={activeSection} />
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        activeSection={activeSection}
+      />
+      <Header
+        activeSection={activeSection}
+        onSidebarOpen={() => setSidebarOpen(true)}
+      />
 
       <main>
         <HomeSection />
@@ -1768,6 +2048,8 @@ export default function App() {
         <ProfileSection />
         <GoldDivider />
         <UPIQRSection />
+        <GoldDivider />
+        <PaymentHistorySection />
       </main>
 
       <footer
