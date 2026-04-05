@@ -1,7 +1,10 @@
+import { Canvas, useFrame } from "@react-three/fiber";
 import { ChevronRight, MapPin, Menu, Phone, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { SiWhatsapp } from "react-icons/si";
+import * as THREE from "three";
+import IntroAnimation from "./components/IntroAnimation";
 
 type Section = "home" | "about" | "contact" | "order" | "profile";
 
@@ -152,6 +155,258 @@ function GoldButton({
   );
 }
 
+// ── WATER DROPLETS (InstancedMesh) ────────────────────────────────────────────
+const DROPLET_COUNT = 16;
+
+function WaterDroplets() {
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+
+  const initialPositions = useMemo(() => {
+    return Array.from({ length: DROPLET_COUNT }, () => ({
+      x: (Math.random() - 0.5) * 4,
+      y: (Math.random() - 0.5) * 5,
+      z: (Math.random() - 0.5) * 3,
+      speed: 0.003 + Math.random() * 0.005,
+      phase: Math.random() * Math.PI * 2,
+      radius: 0.04 + Math.random() * 0.04,
+    }));
+  }, []);
+
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+
+  useFrame(({ clock }) => {
+    if (!meshRef.current) return;
+    const t = clock.getElapsedTime();
+    for (let i = 0; i < DROPLET_COUNT; i++) {
+      const p = initialPositions[i];
+      let currentY = p.y + ((t * p.speed * 50) % 6) - 3;
+      if (currentY > 3.5) currentY = -2.5;
+      const oscX = p.x + Math.sin(t * 0.8 + p.phase) * 0.08;
+      dummy.position.set(oscX, currentY, p.z);
+      dummy.scale.setScalar(p.radius * 20);
+      dummy.updateMatrix();
+      meshRef.current.setMatrixAt(i, dummy.matrix);
+    }
+    meshRef.current.instanceMatrix.needsUpdate = true;
+  });
+
+  return (
+    <instancedMesh ref={meshRef} args={[undefined, undefined, DROPLET_COUNT]}>
+      <sphereGeometry args={[0.05, 8, 8]} />
+      <meshPhysicalMaterial
+        color="#66bbff"
+        transparent
+        opacity={0.7}
+        roughness={0.05}
+        metalness={0.1}
+        transmission={0.3}
+      />
+    </instancedMesh>
+  );
+}
+
+// ── BOTTLE 3D SCENE — GLASS WATER BOTTLE ─────────────────────────────────────
+function BottleScene() {
+  const groupRef = useRef<THREE.Group>(null);
+  const clockRef = useRef(0);
+  const fillRef = useRef(0.05);
+  const waterRef = useRef<THREE.Mesh>(null);
+  const waterSurfaceRef = useRef<THREE.Mesh>(null);
+
+  useFrame((_, delta) => {
+    clockRef.current += delta;
+
+    if (groupRef.current) {
+      groupRef.current.rotation.y += 0.008;
+      groupRef.current.position.y = Math.sin(clockRef.current * 1.2) * 0.18;
+    }
+
+    // Water fill loop: 0 → 3.2 over ~8s
+    fillRef.current += delta * 0.4;
+    if (fillRef.current > 3.2) fillRef.current = 0.05;
+
+    const fill = fillRef.current;
+
+    if (waterRef.current) {
+      waterRef.current.scale.y = fill;
+      waterRef.current.position.y = -1.75 + fill / 2;
+    }
+
+    // Water surface sloshing
+    if (waterSurfaceRef.current) {
+      const topY = -1.75 + fill;
+      waterSurfaceRef.current.position.y =
+        topY + Math.sin(clockRef.current * 4) * 0.03;
+      waterSurfaceRef.current.visible = fill > 0.15;
+    }
+  });
+
+  return (
+    <group ref={groupRef}>
+      {/* Glass bottle body */}
+      <mesh position={[0, 0, 0]}>
+        <cylinderGeometry args={[1, 1.2, 3.5, 64]} />
+        <meshPhysicalMaterial
+          color="#cceeff"
+          transmission={0.95}
+          roughness={0.05}
+          thickness={0.6}
+          ior={1.5}
+          transparent
+          opacity={0.9}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+
+      {/* Water inside bottle */}
+      <mesh ref={waterRef} position={[0, -1.75, 0]}>
+        <cylinderGeometry args={[0.88, 1.08, 1, 64]} />
+        <meshPhysicalMaterial
+          color="#0077cc"
+          transparent
+          opacity={0.65}
+          roughness={0.1}
+          metalness={0.1}
+          envMapIntensity={1.2}
+        />
+      </mesh>
+
+      {/* Water surface disc — slosh effect */}
+      <mesh
+        ref={waterSurfaceRef}
+        position={[0, -1.6, 0]}
+        rotation={[-Math.PI / 2, 0, 0]}
+      >
+        <circleGeometry args={[0.9, 48]} />
+        <meshPhysicalMaterial
+          color="#33aaff"
+          transparent
+          opacity={0.5}
+          roughness={0.05}
+          metalness={0.1}
+        />
+      </mesh>
+
+      {/* Bottle neck */}
+      <mesh position={[0, 2.3, 0]}>
+        <cylinderGeometry args={[0.3, 0.3, 1, 32]} />
+        <meshPhysicalMaterial
+          color="#cceeff"
+          transmission={0.92}
+          roughness={0.05}
+          thickness={0.3}
+          ior={1.5}
+          transparent
+          opacity={0.88}
+        />
+      </mesh>
+
+      {/* Cap — gold */}
+      <mesh position={[0, 3.0, 0]}>
+        <cylinderGeometry args={[0.4, 0.4, 0.4, 64]} />
+        <meshStandardMaterial color="#FFD700" metalness={1} roughness={0.1} />
+      </mesh>
+
+      {/* Floating water droplets */}
+      <WaterDroplets />
+    </group>
+  );
+}
+
+// ── BOTTLE 3D COMPONENT — WATER THEMED ───────────────────────────────────────
+function Bottle3D() {
+  return (
+    <div
+      className="relative w-full h-full overflow-hidden"
+      style={{
+        background: "radial-gradient(ellipse at center, #001a33 60%, #000a1a)",
+      }}
+    >
+      {/* Soft blue/teal glow orb */}
+      <div
+        style={{
+          position: "absolute",
+          width: "600px",
+          height: "600px",
+          background:
+            "radial-gradient(circle, rgba(0,120,255,0.3), transparent)",
+          filter: "blur(100px)",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          pointerEvents: "none",
+          zIndex: 0,
+        }}
+      />
+
+      {/* Brand tagline top */}
+      <div
+        style={{
+          position: "absolute",
+          top: "16px",
+          width: "100%",
+          textAlign: "center",
+          pointerEvents: "none",
+          zIndex: 10,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: "'Georgia', serif",
+            fontSize: "18px",
+            letterSpacing: "6px",
+            color: "#cceeff",
+            textShadow: "0 0 20px rgba(0,170,255,0.6)",
+            fontWeight: 400,
+          }}
+        >
+          Annapurna Purity
+        </div>
+        <div
+          style={{
+            fontSize: "11px",
+            letterSpacing: "4px",
+            color: "rgba(180,220,255,0.7)",
+            marginTop: "4px",
+            textTransform: "uppercase",
+            fontFamily: "'Georgia', serif",
+          }}
+        >
+          PURE • FRESH • NATURAL
+        </div>
+      </div>
+
+      <Canvas
+        gl={{ alpha: true, antialias: true }}
+        camera={{ position: [0, 0, 6], fov: 70 }}
+        style={{
+          background: "transparent",
+          position: "relative",
+          zIndex: 1,
+          width: "100%",
+          height: "100%",
+        }}
+      >
+        {/* Studio lighting setup */}
+        <ambientLight intensity={0.4} color="#b3d9ff" />
+        {/* Key light */}
+        <pointLight position={[4, 6, 5]} intensity={2.0} color="#ffffff" />
+        {/* Cyan fill */}
+        <pointLight position={[-4, 2, 3]} intensity={1.2} color="#66ccff" />
+        {/* Gold rim */}
+        <pointLight position={[0, -3, -4]} intensity={0.8} color="#ffd700" />
+        {/* Top directional */}
+        <directionalLight
+          position={[0, 8, 2]}
+          intensity={0.6}
+          color="#ffffff"
+        />
+        <BottleScene />
+      </Canvas>
+    </div>
+  );
+}
+
 // ── HOME SECTION ──────────────────────────────────────────────────────────────
 function HomeSection() {
   return (
@@ -161,119 +416,217 @@ function HomeSection() {
       className="relative min-h-screen flex flex-col justify-center scroll-mt-24"
       style={{ scrollMarginTop: "96px" }}
     >
-      {/* Background image with overlay */}
+      {/* Dark radial gradient background */}
       <div
         className="absolute inset-0 z-0"
         style={{
-          backgroundImage: `url('/assets/generated/hero-annapurna-bg.dim_1200x600.jpg')`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundRepeat: "no-repeat",
+          background: "radial-gradient(circle, #000000, #1a1a1a)",
         }}
-      >
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(to bottom, rgba(11,11,11,0.55) 0%, rgba(11,11,11,0.75) 60%, rgba(11,11,11,1) 100%)",
-          }}
-        />
-      </div>
+      />
 
-      <div className="relative z-10 max-w-4xl mx-auto px-6 py-24">
+      <div className="relative z-10 w-full max-w-6xl mx-auto px-6 py-24">
+        <div className="flex flex-col lg:flex-row items-center gap-12 lg:gap-16">
+          {/* Left column: Logo card + text content */}
+          <motion.div
+            className="flex-1 order-1 flex flex-col items-center lg:items-start"
+            initial={{ opacity: 0, y: 32 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, ease: "easeOut" }}
+          >
+            {/* Glowing logo card */}
+            <motion.div
+              className="mb-10 text-center"
+              style={{
+                padding: "30px",
+                borderRadius: "20px",
+                background: "rgba(0,0,0,0.8)",
+                animation: "logoGlow 3s infinite alternate",
+              }}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.8, ease: "easeOut" }}
+            >
+              <img
+                src="/logo.png"
+                alt="Annapurna Purity Logo"
+                style={{
+                  width: "200px",
+                  borderRadius: "16px",
+                  boxShadow: "0 0 30px gold",
+                  display: "block",
+                  margin: "0 auto",
+                }}
+              />
+              <div
+                style={{
+                  marginTop: "15px",
+                  fontSize: "26px",
+                  color: "gold",
+                  letterSpacing: "3px",
+                  fontWeight: 700,
+                  fontFamily: "Arial, sans-serif",
+                }}
+              >
+                ANNA PURITY
+              </div>
+              <div
+                style={{
+                  color: "#ddd",
+                  fontSize: "13px",
+                  letterSpacing: "2px",
+                  marginTop: "4px",
+                }}
+              >
+                PURITY IN EVERY DROP
+              </div>
+            </motion.div>
+
+            <p
+              className="text-sm font-semibold tracking-[0.25em] uppercase mb-4 text-center lg:text-left"
+              style={{ color: "oklch(var(--gold-muted))" }}
+            >
+              Established in Odisha, India
+            </p>
+
+            <p
+              className="text-lg md:text-xl leading-relaxed max-w-2xl text-center lg:text-left"
+              style={{ color: "oklch(var(--gold-muted))" }}
+            >
+              We provide high quality plastic bottles with premium design.
+            </p>
+
+            <div className="mt-8 flex flex-wrap gap-4 justify-center lg:justify-start">
+              <GoldButton
+                onClick={() => {
+                  document
+                    .getElementById("order")
+                    ?.scrollIntoView({ behavior: "smooth" });
+                }}
+                data-ocid="home.primary_button"
+              >
+                Place an Order <ChevronRight className="w-4 h-4" />
+              </GoldButton>
+
+              <button
+                type="button"
+                onClick={() => {
+                  document
+                    .getElementById("about")
+                    ?.scrollIntoView({ behavior: "smooth" });
+                }}
+                data-ocid="home.secondary_button"
+                style={{
+                  background: "transparent",
+                  color: "oklch(var(--gold))",
+                  border: "1px solid oklch(var(--gold) / 50%)",
+                  borderRadius: "10px",
+                  padding: "12px 28px",
+                  fontSize: "15px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "border-color 0.2s, background 0.2s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = "oklch(var(--gold))";
+                  e.currentTarget.style.background = "oklch(var(--gold) / 8%)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor =
+                    "oklch(var(--gold) / 50%)";
+                  e.currentTarget.style.background = "transparent";
+                }}
+              >
+                Learn More
+              </button>
+            </div>
+          </motion.div>
+
+          {/* Right column: 3D bottle — water glow panel */}
+          <motion.div
+            className="order-2 w-full lg:w-auto lg:flex-shrink-0"
+            style={{
+              height: "400px",
+              width: "100%",
+              maxWidth: "440px",
+              borderRadius: "16px",
+              overflow: "hidden",
+              border: "1px solid rgba(0,170,255,0.25)",
+              boxShadow: "0 0 40px rgba(0,120,255,0.15)",
+            }}
+            initial={{ opacity: 0, scale: 0.85 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.9, ease: "easeOut", delay: 0.2 }}
+            whileHover={{ scale: 1.02 }}
+          >
+            <div className="w-full h-full" style={{ height: "400px" }}>
+              <Bottle3D />
+            </div>
+          </motion.div>
+        </div>
+
+        {/* Glassmorphism CTA Card */}
         <motion.div
-          initial={{ opacity: 0, y: 32 }}
+          className="mt-12 w-full flex justify-center"
+          initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, ease: "easeOut" }}
+          transition={{ delay: 0.5, duration: 0.7, ease: "easeOut" }}
         >
-          {/* Logo icon */}
-          <div className="mb-8">
-            <img
-              src="/assets/generated/annapurna-logo-icon-transparent.dim_120x120.png"
-              alt="Annapurna Purity Logo"
-              className="w-20 h-20 object-contain"
-            />
-          </div>
-
-          <p
-            className="text-sm font-semibold tracking-[0.25em] uppercase mb-4"
-            style={{ color: "oklch(var(--gold-muted))" }}
+          <div
+            style={{
+              backdropFilter: "blur(12px)",
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: "16px",
+              padding: "24px 40px",
+              textAlign: "center",
+              maxWidth: "480px",
+              width: "100%",
+            }}
           >
-            Established in Odisha, India
-          </p>
-
-          <h1
-            className="text-4xl md:text-6xl lg:text-7xl font-bold font-display leading-tight mb-4"
-            style={{ color: "oklch(var(--gold))" }}
-          >
-            Welcome to
-            <br />
-            <span style={{ color: "oklch(var(--gold-bright))" }}>
-              Annapurna Purity
-            </span>
-          </h1>
-
-          <p
-            className="text-2xl md:text-3xl font-display italic mb-6"
-            style={{ color: "oklch(var(--gold-muted))" }}
-          >
-            Purity in Every Drop
-          </p>
-
-          <GoldDivider className="mb-6 max-w-xs" />
-
-          <p
-            className="text-lg md:text-xl leading-relaxed max-w-2xl"
-            style={{ color: "oklch(var(--gold-muted))" }}
-          >
-            We provide high quality plastic bottles with premium design.
-          </p>
-
-          <div className="mt-10 flex flex-wrap gap-4">
-            <GoldButton
+            <p
+              style={{
+                color: "rgba(255,255,255,0.85)",
+                fontSize: "18px",
+                marginBottom: "16px",
+                letterSpacing: "0.03em",
+              }}
+            >
+              Stay hydrated in style.
+            </p>
+            <motion.button
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.95 }}
               onClick={() => {
                 document
                   .getElementById("order")
                   ?.scrollIntoView({ behavior: "smooth" });
               }}
-              data-ocid="home.primary_button"
-            >
-              Place an Order <ChevronRight className="w-4 h-4" />
-            </GoldButton>
-
-            <button
-              type="button"
-              onClick={() => {
-                document
-                  .getElementById("about")
-                  ?.scrollIntoView({ behavior: "smooth" });
-              }}
-              data-ocid="home.secondary_button"
+              data-ocid="home.shop_now.button"
               style={{
-                background: "transparent",
-                color: "oklch(var(--gold))",
-                border: "1px solid oklch(var(--gold) / 50%)",
+                background: "white",
+                color: "#0B0B0B",
+                border: "none",
                 borderRadius: "10px",
-                padding: "12px 28px",
+                padding: "12px 32px",
                 fontSize: "15px",
-                fontWeight: 600,
+                fontWeight: 700,
                 cursor: "pointer",
-                transition: "border-color 0.2s, background 0.2s",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = "oklch(var(--gold))";
-                e.currentTarget.style.background = "oklch(var(--gold) / 8%)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = "oklch(var(--gold) / 50%)";
-                e.currentTarget.style.background = "transparent";
+                letterSpacing: "0.04em",
               }}
             >
-              Learn More
-            </button>
+              Shop Now
+            </motion.button>
           </div>
         </motion.div>
       </div>
+
+      {/* Keyframe for logo card glow */}
+      <style>{`
+        @keyframes logoGlow {
+          0% { box-shadow: 0 0 20px rgba(255,215,0,0.3); }
+          100% { box-shadow: 0 0 60px rgba(255,215,0,0.8); }
+        }
+      `}</style>
     </section>
   );
 }
@@ -822,9 +1175,15 @@ function Header({ activeSection }: { activeSection: Section }) {
             style={{ background: "none", border: "none", cursor: "pointer" }}
           >
             <img
-              src="/assets/generated/annapurna-logo-icon-transparent.dim_120x120.png"
+              src="/logo.png"
               alt="Logo"
-              className="w-8 h-8 object-contain"
+              className="object-contain"
+              style={{
+                width: "36px",
+                height: "36px",
+                borderRadius: "8px",
+                boxShadow: "0 0 10px rgba(255,215,0,0.5)",
+              }}
             />
             <div>
               <div
@@ -979,6 +1338,7 @@ function Header({ activeSection }: { activeSection: Section }) {
 // ── ROOT APP ──────────────────────────────────────────────────────────────────
 export default function App() {
   const [activeSection, setActiveSection] = useState<Section>("home");
+  const [showIntro, setShowIntro] = useState(true);
 
   useEffect(() => {
     const sectionIds: Section[] = [
@@ -1014,6 +1374,7 @@ export default function App() {
       className="min-h-screen font-sans"
       style={{ background: "#0B0B0B", color: "oklch(var(--gold))" }}
     >
+      {showIntro && <IntroAnimation onDismiss={() => setShowIntro(false)} />}
       <Header activeSection={activeSection} />
 
       <main>
