@@ -631,7 +631,7 @@ export default function IntroAnimation({ onDismiss }: IntroAnimationProps) {
                 </div>
 
                 <img
-                  src="/logo.png"
+                  src="/assets/generated/annapurna-purity-logo.dim_1000x1000.png"
                   alt="Annapurna Purity"
                   style={{
                     width: "min(160px, 40vw)",

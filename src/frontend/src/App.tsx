@@ -470,7 +470,7 @@ function HomeSection() {
               transition={{ duration: 0.8, ease: "easeOut" }}
             >
               <img
-                src="/logo.png"
+                src="/assets/generated/annapurna-purity-logo.dim_1000x1000.png"
                 alt="Annapurna Purity Logo"
                 style={{
                   width: "200px",
@@ -1601,7 +1601,7 @@ function Sidebar({
             >
               <div className="flex items-center gap-3">
                 <img
-                  src="/logo.png"
+                  src="/assets/generated/annapurna-purity-logo.dim_1000x1000.png"
                   alt="Logo"
                   style={{
                     width: "32px",
@@ -1795,7 +1795,7 @@ function Header({
             style={{ background: "none", border: "none", cursor: "pointer" }}
           >
             <img
-              src="/logo.png"
+              src="/assets/generated/annapurna-purity-logo.dim_1000x1000.png"
               alt="Logo"
               className="object-contain"
               style={{
